@@ -5,7 +5,7 @@ repositories{
 }
 
 dependencies {
-    compile 'com.github.buzzcard:android-transcoder:v0.1.14R_busivid'
+    compile 'com.github.buzzcard:android-transcoder:v0.1.15R_busivid'
 }
 
 android {
