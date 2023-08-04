@@ -116,7 +116,7 @@
         float aspectRatio = videoWidth / videoHeight;
 
         // for some portrait videos ios gives the wrong width and height, this fixes that
-        NSString *videoOrientation = [self getOrientationForTrack:avAsset];
+        NSString *videoOrientation = [self getOrientationForAsset:avAsset];
         if ([videoOrientation isEqual: @"portrait"]) {
             if (videoWidth > videoHeight) {
                 videoWidth = mediaSize.height;
@@ -136,11 +136,14 @@
     NSLog(@"input videoHeight: %f", videoHeight);
     NSLog(@"output newWidth: %d", newWidth);
     NSLog(@"output newHeight: %d", newHeight);
+    
+    CGSize size = CGSizeMake(newWidth, newHeight);
 
     SDAVAssetExportSession *encoder = [SDAVAssetExportSession.alloc initWithAsset:avAsset];
     encoder.outputFileType = stringOutputFileType;
     encoder.outputURL = outputURL;
     encoder.shouldOptimizeForNetworkUse = optimizeForNetworkUse;
+    encoder.videoComposition = [self getVideoComposition:avAsset size:size];
     encoder.videoSettings = @
     {
         AVVideoCodecKey: AVVideoCodecH264,
@@ -361,7 +364,7 @@
     float aspectRatio = videoWidth / videoHeight;
 
     // for some portrait videos ios gives the wrong width and height, this fixes that
-    NSString *videoOrientation = [self getOrientationForTrack:avAsset];
+    NSString* videoOrientation = [self getOrientationForAsset:avAsset];
     if ([videoOrientation isEqual: @"portrait"]) {
         if (videoWidth > videoHeight) {
             videoWidth = mediaSize.height;
@@ -557,21 +560,69 @@
     return newImage;
 }
 
-// inspired by http://stackoverflow.com/a/6046421/1673842
-- (NSString*)getOrientationForTrack:(AVAsset *)asset
+- (UIImageOrientation)getOrientationForTrack:(AVAssetTrack *)videoTrack
 {
-    AVAssetTrack *videoTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
-    CGSize size = [videoTrack naturalSize];
-    CGAffineTransform txf = [videoTrack preferredTransform];
+    CGAffineTransform txf = videoTrack.preferredTransform;
+    
+    if (txf.a == 0 && txf.b == 1.0 && txf.c == -1.0 && txf.d == 0) {
+        return UIImageOrientationUp;
+    }
 
-    if (size.width == txf.tx && size.height == txf.ty)
-        return @"landscape";
-    else if (txf.tx == 0 && txf.ty == 0)
-        return @"landscape";
-    else if (txf.tx == 0 && txf.ty == size.width)
+    if (txf.a == 0 && txf.b == -1.0 && txf.c == 1.0 && txf.d == 0) {
+        return UIImageOrientationDown;
+    }
+    
+    if (txf.a == 1.0 && txf.b == 0 && txf.c == 0 && txf.d == 1.0) {
+        return UIImageOrientationLeft;
+    }
+    
+    if (txf.a == -1.0 && txf.b == 0 && txf.c == 0 && txf.d == -1.0) {
+        return UIImageOrientationRight;
+    }
+    
+    //default
+    return UIImageOrientationUp;
+}
+
+- (NSString*)getOrientationForAsset: (AVAsset*) asset {
+    AVAssetTrack *videoTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
+    UIImageOrientation orientation = [self getOrientationForTrack:videoTrack];
+    
+    if (orientation == UIImageOrientationUp || orientation == UIImageOrientationDown) {
         return @"portrait";
-    else
-        return @"portrait";
+    }
+    
+    return @"landscape";
+}
+
+// Returns an adjusted transform for rendering.
+// will ensure videos are oritentated correctly, even from external sources.
+- (CGAffineTransform)getTransform:(AVAssetTrack *)videoTrack
+{
+    CGAffineTransform txf = videoTrack.preferredTransform;
+    CGSize size = videoTrack.naturalSize;
+    
+    UIImageOrientation videoOrientation = [self getOrientationForTrack:videoTrack];
+    switch(videoOrientation) {
+        case UIImageOrientationUp:
+            txf.tx = size.height;
+            break;
+            
+        case UIImageOrientationDown:
+            txf.ty = size.width;
+            break;
+            
+        case UIImageOrientationLeft:
+            //left requires no adjustments.
+            break;
+            
+        case UIImageOrientationRight:
+            txf.tx = size.width;
+            txf.ty = size.height;
+            break;
+    }
+    
+   return txf;
 }
 
 - (NSURL*)getURLFromFilePath:(NSString*)filePath
@@ -585,6 +636,7 @@
     return [NSURL fileURLWithPath:[filePath stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
 }
 
+<<<<<<< HEAD
 static NSString* getMediaTypeFromDescription(id description) {
     CMFormatDescriptionRef desc = (__bridge CMFormatDescriptionRef)description;
     FourCharCode code = CMFormatDescriptionGetMediaSubType(desc);
@@ -596,6 +648,30 @@ static NSString* getMediaTypeFromDescription(id description) {
                         code & 0xff];
     NSCharacterSet *characterSet = [NSCharacterSet whitespaceCharacterSet];
     return [result stringByTrimmingCharactersInSet:characterSet];
+=======
+- (AVMutableVideoComposition*) getVideoComposition:(AVAsset *)asset size:(CGSize) size {
+    AVAssetTrack *videoTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
+    
+    AVMutableVideoComposition *videoComposition = [[AVMutableVideoComposition alloc] init];
+    videoComposition.renderSize = size;
+    
+    CGAffineTransform transform = [self getTransform: videoTrack];
+    
+    float seconds = 1.0 / videoTrack.nominalFrameRate;
+    videoComposition.frameDuration = CMTimeMakeWithSeconds(seconds, 600);
+    
+    AVMutableVideoCompositionLayerInstruction *videoLayerInstruction = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:videoTrack];
+    [videoLayerInstruction setTransform:transform atTime:kCMTimeZero];
+    
+    //finalize
+    [videoLayerInstruction setOpacity:0.0 atTime:asset.duration];
+    AVMutableVideoCompositionInstruction *inst = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
+    inst.timeRange = CMTimeRangeMake(kCMTimeZero, asset.duration);
+    inst.layerInstructions = [NSArray arrayWithObject:videoLayerInstruction];
+    
+    videoComposition.instructions = [NSArray arrayWithObject:inst];
+    return videoComposition;
+>>>>>>> 3a564cd11435912e570cc0c6c93fece3d2d51578
 }
 
 static dispatch_time_t getDispatchTimeFromSeconds(float seconds) {
