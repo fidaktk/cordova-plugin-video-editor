@@ -24,14 +24,12 @@ public class CustomAndroidFormatStrategy implements MediaFormatStrategy {
     public static final boolean DEFAULT_SKIP_AVC_VIDEO_TRANSCODING = false;
     private static final String TAG = "CustomFormatStrategy";
     private final int mVideoBitrate;
-    
     private final int mFrameRate;
     private final int width;
     private final int height;
     private final int mAudioBitrate;
     private final int mAudioChannels;
     private final boolean mSkipVideoTranscodingIfAVC;
-    
     public CustomAndroidFormatStrategy() {
         this.mVideoBitrate = DEFAULT_VIDEO_BITRATE;
         this.mFrameRate = DEFAULT_FRAMERATE;
@@ -42,7 +40,7 @@ public class CustomAndroidFormatStrategy implements MediaFormatStrategy {
         this.mSkipVideoTranscodingIfAVC = DEFAULT_SKIP_AVC_VIDEO_TRANSCODING;
     }
 
- public CustomAndroidFormatStrategy(final int videoBitrate,
+    public CustomAndroidFormatStrategy(final int videoBitrate,
                                        final int frameRate,
                                        final int width,
                                        final int height,
@@ -63,7 +61,6 @@ public class CustomAndroidFormatStrategy implements MediaFormatStrategy {
         if (isAVCVideoFormat && mSkipVideoTranscodingIfAVC) {
             return null;
         }
-        
         int inWidth = inputFormat.getInteger(MediaFormat.KEY_WIDTH);
         int inHeight = inputFormat.getInteger(MediaFormat.KEY_HEIGHT);
         int inLonger, inShorter, outWidth, outHeight, outLonger;
